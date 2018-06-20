@@ -3,12 +3,13 @@
     create a HTML report of Azure resources
 
  .DESCRIPTION
-    build inventory data of Azure resources based on subscription and/or resourcegroup scope
+    build inventory data of Azure resources based on subscription and/or resourcegroup scope. 
+    select your subscription and the resource groups to be listed and there you go.
 
  .PARAMETER outdir
-    Directory where all the output will land (will be created if not found). 
+    Directory where all the output will go to (will be created if not found). 
     Different HTML pages will link to each other relatively, all in that directory.
-    If left out, user TEMP directory with "report" and timestamp will be created
+    If left out, a directory in user TEMP will be created (with "report" and timestamp)
 
 #>
 
@@ -86,7 +87,7 @@ if ($ErrorMessage -like '*login*'){
 if ($FatalError -eq 0){
     #pick the subscription first
     Get-AzureRmSubscription | select-object Name,ID,state |Out-GridView -Title "Select subscription" -OutputMode Single | ForEach-Object {
-        $sub = Get-AzureRmSubscription -Name $_.Name
+        $sub = Get-AzureRmSubscription -subscriptionName $_.Name
     }
 
     "working on {0}" -f $sub.Name
@@ -158,485 +159,264 @@ if ($FatalError -eq 0){
         </head>
         "
 
-        #start with the overview page
-        $outputmain = $outputhead + "
-    <body>
-        <h1 id='top'>Azure Inventory</h1>
-        <table id=inventory width='50%'>
-            <tr>
-                <td>
-                    created:
-                </td>
-                <td>
-                    {0}
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    Tenant-ID:
-                </td>
-                <td>
-                    {1}
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    Subscription-ID:
-                </td>
-                <td>
-                    {2}
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    Subscription name:
-                </td>
-                <td>
-                    {3}
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    Resourcegroups:
-                </td>
-                <td>
-                    {4}
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    Total Resources:
-                </td>
-                <td>
-                    {5}
-                </td>
-            </tr>
-        </table>
-        " -f $now,$sub.TenantId,$sub.SubscriptionId,$sub.Name,$nrRG,$nrResources
+        #define a standard table row
+        $intlink = "<a href='#{0}'>{1}</a>"
+        $extlink = "<a href='{0}.htm'>{1}</a>"
 
-        $outputmain += "
-        <h1>Resourcegroups</h1>
-        <p>Total: {0}, Selected {1}</p>
+        $table = "
+        <table id=inventory width='{0}%'>
+        "
 
-        <table id=inventory width='50%'>
-            <tr>
-                <th>
-                    Resourcegroupname
-                </th>
-                <th>
-                    Location
-                </th>
-            </tr>
-        " -f $nrRG,$nrRGSelected
+        $rowhead="
+        <tr>
+            <th>
+                {0}
+            </th>
+            <th>
+                {1}
+            </th>
+        </tr>
+        "
+
+        $rowdetailhead="
+        <tr>
+            <th>
+                {0}
+            </th>
+            <th colspan=2>
+                {1}
+            </th>
+        </tr>
+        "
+
+        $row="
+        <tr>
+            <td>
+                {0}
+            </td>
+            <td>
+                {1}
+            </td>
+        </tr>
+        "
+
+        $rowdetail="
+        <tr>
+            <td>
+                {0}
+            </td>
+            <td colspan=2>
+                {1}
+            </td>
+        </tr>
+        "
+
+        $row3detail="
+        <tr>
+            <td>
+                {0}
+            </td>
+            <td>
+                {1}
+            </td>
+            <td>
+                {2}
+            </td>
+        </tr>
+        "
+
+         
+###### start with the overview page
+        $outputmain = $outputhead 
+        $outputmain += "<body>"
+        $outputmain += "<h1 id='top'>Azure Inventory</h1>"
+        $outputmain += $table -f "50"
+        $outputmain += $row -f "created",$now
+        $outputmain += $row -f "Tenant-ID",$sub.TenantId
+        $outputmain += $row -f "Subscription-ID",$sub.SubscriptionId
+        $outputmain += $row -f "Subscription name",$sub.Name
+        $outputmain += $row -f "Resourcegroups",$nrRG
+        $outputmain += $row -f "Total Resources",$nrResources
+        $outputmain += "</table>"
+        
+###### we build a list of resourcegroups and - for each of them - a separate html file with the resources
+        $outputmain += "<h1>Resourcegroups</h1><p>Total: {0}, Selected {1}</p>" -f $nrRG,$nrRGSelected
+        $outputmain += $table -f "50"
+        $outputmain += $rowhead -f "Resourcegroupname", "Location"
 
         $rgnumber=0;
         $rnumber=0
 
+###### here we start walking through all RGs and 
+###### add a line to the main html page ($outputmain) and 
+###### new html content with the resources of that RG (in $outputRG)
+
         foreach ($RG in $RGSelected.Keys) {
             $thisRG=Get-AzureRmResourceGroup -Name $RG
-            $outputmain += "
-            <tr>
-                <td>
-                    <a href='{0}.htm'>{0}</a>
-                </td>
-                <td>
-                    {1}
-                </td>
-            </tr>
-            " -f $RG,$thisRG.Location
-
+            $link = $extlink -f $RG,$RG
+            $outputmain += $row -f $link,$thisRG.Location
 
             $rgnumber++
             $rnumber=0
-            $outputRG = $outputhead +"
-    <h1>
-        {0}. Resourcegroup {1}
-    </h1>
-            " -f $rgnumber,$RG
 
+
+            $outputRG = $outputhead +"<h1>{0}. Resourcegroup {1}</h1>" -f $rgnumber,$RG
+
+            ### do we have a RG with Tags?
             if ($thisRG.tags.keys.length -gt 0){
-                $outputRG +"
-        <table id=inventory width='50%'>
-            <tr>
-                <th>
-                    Tag
-                </th>
-                <th>
-                    Value
-                </th>
-            </tr>
-            "
-        
+                $outputRG += $table -f "50"
+                $outputRG += $rowhead -f "Tag","Value"
+                        
                 foreach ($key in $thisRG.tags.keys){
-                    $outputRG +="
-            <tr>
-                <td>
-                    {0}
-                </td>
-                <td>
-                    {1}
-                </td>
-            </tr>
-                " -f $key, $resourcegroup.tags[$key]
+                    $outputRG += $row -f $key, $resourcegroup.tags[$key]
                 }
 
-                $outputRG += "
-        </table>
-                "
-            } #if any tags
+                $outputRG += "</table>"
+            } #tags
 
-            $outputRG += "
-        <h2>
-            All resources in resourcegroup {0}
-        </h2>
-        <table id=inventory width='75%'>
-            <tr>
-                <th>
-                    Resourcename
-                </th>
-                <th>
-                    Type
-                </th>
-            </tr>
-            " -f $RG
-    
+            $outputRG += "<h2>All resources in resourcegroup {0}</h2>" -f $RG
+            $outputRG += $table -f "75"
+            $outputRG += $rowhead -f "Resourcename","Type"
+
+###### we create a table with the resource details (in $resourcetable)
             $resourcetable = ""
             $detailtable = ""
+
+###### and we walk through all Resources and filter out those in the current RG
+###### this seems to be faster than Find-AzureRmResource -ResourceGroupNameContains
+
             $Resources | Where-Object {$_.resourcegroupname -eq $RG}| ForEach-Object {
                 $rnumber++
                 $thisresource=$_
+                $link = $intlink -f $thisresource.Name,$thisresource.Name
+                $resourcetable += $row -f $link,$thisresource.resourcetype
 
-                $resourcetable += "
-            <tr>
-                <td>
-                    <a href='#{0}'>{1}</a>
-                </td>
-                <td>
-                    {2}
-                </td>
-            </tr>
-                " -f $thisresource.Name,$thisresource.Name,$thisresource.resourcetype
-
+                ### for the sake of readbility we replace the resourcetype with a more friendly name (see top)
                 if ($displayname.ContainsKey($thisresource.resourcetype)){
                     $display=$displayname.($thisresource.resourcetype)
                 } else {
                     $display="Resource"
                 }
 
-                $detailtable += "
-        <h3>
-            <a name='{0}'>{1}.{2} {3} '{4}' in resourcegroup {5}</a>
-        </h3>
-        <table id=inventory width='50%'>
-            <tr>
-                <th>
-                    Attribute
-                </th>
-                <th colspan=2>
-                    Value
-                </th>
-            </tr>
-            <tr>
-                <td>
-                    ResourceType
-                </td>
-                <td colspan=2>
-                    {6}
-                </td>
-            </tr>
-                " -f $thisresource.name,$rgnumber,$rnumber,$display,$thisresource.Name,$RG,$thisresource.resourcetype
+                $detailtable += "<h3><a name='{0}'>{1}.{2} {3} '{4}' in resourcegroup {5}</a></h3>" -f $thisresource.name,$rgnumber,$rnumber,$display,$thisresource.Name,$RG
+                $detailtable += $table -f "50"
+                $detailtable += $rowdetailhead -f "Attribute","Value"
+                $detailtable += $rowdetail -f "ResourceType",$thisresource.resourcetype
 
                 foreach ($key in $thisresource.tags.keys){
-                    $detailtable +="
-            <tr>
-                <td>
-                    {0}
-                </td>
-                <td colspan=2>
-                    {1}
-                </td>
-            </tr>
-                    " -f $key, $thisresource.tags[$key]
+                    $detailtable += $rowdetail -f $key, $thisresource.tags[$key]
                 }
-    
-                #now go for the real details. place a handler for each resourcetype here
+
+###### this is where the magic happens
+###### now we go for the real details. place a handler for each resourcetype here
+
+
                 switch ($thisresource.resourcetype) {
 
+######## Microsoft.Compute/virtualMachines
                     "Microsoft.Compute/virtualMachines" {
                         $vm=get-azurermvm -Name $thisresource.Resourcename -ResourceGroupName $RG -WarningAction "SilentlyContinue"
-                        $detailtable+="
-                <tr>
-                    <td>
-                        VM size
-                    </td>
-                    <td colspan=2>
-                        {0}
-                    </td>
-                </tr>
-                        " -f $vm.HardwareProfile.vmSize
+                        $detailtable += $rowdetail -f "VM Size",$vm.HardwareProfile.vmSize
                 
                         if ($vm.StorageProfile.ImageReference){
-                            $detailtable+="
-                <tr>
-                    <td>
-                        Image offer
-                    </td>
-                    <td colspan=2>
-                        {0}
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        Image SKU
-                    </td>
-                    <td colspan=2>
-                        {1}
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        Image publisher
-                    </td>
-                    <td colspan=2>
-                        {2}
-                    </td>
-                </tr>
-                            " -f $vm.storageProfile.Imagereference.offer,$vm.storageProfile.ImageReference.Sku,$vm.storageProfile.ImageReference.publisher
+                            $detailtable += $rowdetail -f "Image offer",$vm.storageProfile.Imagereference.offer
+                            $detailtable += $rowdetail -f "ImageSKU", $vm.storageProfile.ImageReference.Sku
+                            $detailtable += $rowdetail -f "Image publisher",$vm.storageProfile.ImageReference.publisher
                         }
+
                         $temp=Get-AzureRmVM -ResourceGroupName $RG -Name $thisresource.Resourcename -status -InformationAction "SilentlyContinue" -WarningAction "SilentlyContinue"
                         ForEach ($VMStatus in $temp.Statuses){
                             if ($VMStatus.Code -like "PowerState/*"){
                                 $status=$VMStatus.Code.split("/")[1]
-                                $detailtable+="
-                <tr>
-                    <td>
-                        PowerState
-                    </td>
-                    <td colspan=2>
-                        {0}
-                    </td>
-                </tr>
-                                " -f $status
+                                $detailtable += $rowdetail -f "PowerState",$status
                             }
-                        }
-                    }
+                        }#status
+                    }#vm handler
 
+######## Microsoft.Storage/storageAccounts
                     "Microsoft.Storage/storageAccounts" {
-                        $detailtable+="
-                <tr>
-                    <td>
-                        SKU name
-                    </td>
-                    <td colspan=2>
-                        {0}
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        SKU tier
-                    </td>
-                    <td colspan=2>
-                        {1}
-                    </td>
-                </tr>
-                        " -f $thisresource.sku.name,$thisresource.sku.tier
-                    }
+                        $detailtable += $rowdetail -f "SKU name",$thisresource.sku.name
+                        $detailtable += $rowdetail -f "SKU tier",$thisresource.sku.tier
+                    }#storageAccount handler
 
+
+######## Microsoft.Web/sites
                     "Microsoft.Web/sites" {
                         $website=Get-AzureRmWebApp -ResourceGroupName $RG -Name $thisresource.name
-                        $detailtable+="
-                <tr>
-                    <td>
-                        State:
-                    </td>
-                    <td colspan=2>
-                        {0}
-                    </td>
-                </tr>
-                        " -f $website.state
+                        $detailtable += $rowdetail -f "State",$website.state
 
                         foreach ($hostname in $website.hostNames){
-                            $detailtable+="
-                <tr>
-                    <td>
-                        hostname
-                    </td>
-                    <td colspan=2>
-                        {0}
-                    </td>
-                </tr>
-                            " -f $hostname
+                            $detailtable += $rowdetail -f "hostname",$hostname
                         }
-                    }
+                    }#website handler
 
+
+######## Microsoft.Sql/servers
                     "Microsoft.Sql/servers" {
-                        $detailtable+="
-                <tr>
-                    <td>
-                        Kind
-                    </td>
-                    <td colspan=2>
-                        {0}
-                    </td>
-                </tr>
-                        " -f $thisresource.Kind
-                    }
+                        $detailtable += $rowdetail -f "Kind",$thisresource.Kind
+                    }#sql server handler
 
+
+######## Microsoft.Sql/servers/databases
                     "Microsoft.Sql/servers/databases" {
-                        $detailtable+="
-                <tr>
-                    <td>
-                        Kind
-                    </td>
-                    <td colspan=2>
-                        {0}
-                    </td>
-                </tr>
-                        " -f $thisresource.Kind
-                    }
+                        $detailtable += $rowdetail -f "Kind",$thisresource.Kind
+                    }#database handler
 
+
+######## Microsoft.Network/networkInterfaces
                     "Microsoft.Network/networkInterfaces" {
                         $nic = Get-AzureRmNetworkInterface -Name $thisresource.Name -ResourceGroupName $RG 
                         $linkedVMId = $nic.VirtualMachine.Id
-                        $detailtable += "
-                <tr>
-                    <td>
-                        attachedTo
-                    </td>
-                        "
                         if ($linkedVMId){
                             $linkedVM = Get-AzureRmResource -ResourceId $linkedVMId
-                            $detailtable+="
-                    <td colspan=2>
-                        <a href='#{0}'>{1} (in {2})</a>
-                    </td>
-                </tr>
-                            " -f $linkedVM.Name,$linkedVM.Name,$linkedVM.Resourcegroupname
+                            $link = $intlink -f $linkedVM.Name,$linkedVM.Name
+                            $link2 = $extlink -f $linkedVM.Resourcegroupname,$linkedVM.Resourcegroupname
+                            $attachedText = "{0} (in {1})" -f $link,$link2
+                            $detailtable += $rowdetail -f "attachedTo",$attachedText
                         } else {
-                            $detailtable+="
-                    <td colspan=2>
-                        nothing
-                    </td>
-                </tr>
-                            "
+                            $detailtable += $rowdetail -f "nothing"
                         }
 
                         foreach ($ipconfig in $nic.IpConfigurations){
-                            $detailtable += "
-                <tr>
-                    <td>
-                        IPconfig
-                    </td>
-                    <td>
-                        Name
-                    </td>
-                    <td>
-                        {0}
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        &nbsp;
-                    </td>
-                    <td>
-                        PrivateIP
-                    </td>
-                    <td>
-                        {1}
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        &nbsp;
-                    </td>
-                    <td>
-                        AllocationMethodPrivateIP
-                    </td>
-                    <td>
-                        {2}
-                    </td>
-                </tr>
-                            " -f $ipconfig.name,$ipconfig.PrivateIpAddress,$ipconfig.PrivateIPAllocationMethod
+                            $detailtable += $row3detail -f "IPconfig","Name",$ipconfig.name
+                            $detailtable += $row3detail -f "&nbsp;","PrivateIP",$ipconfig.PrivateIpAddress
+                            $detailtable += $row3detail -f "&nbsp;","AllocationMethodPrivateIP",$ipconfig.PrivateIPAllocationMethod
                             
                             $subnetID=$ipconfig.Subnet.Id
                             $subnetparts=$subnetid.split("/")
-                            
                         }
-        
-                    }
+                    }#nic handler
 
+                    
+######## Microsoft.Network/publicIPAddresses
                     "Microsoft.Network/publicIPAddresses" {
                         $pip = Get-AzureRmPublicIpAddress -Name $thisresource.Name -ResourceGroupName $RG 
                         $attached=$pip.IpConfiguration
                         if ($attached.length -gt 0){
                             $temp=$attached.id.split("/")
-                            $attachedText = "ipconfig {2} on <a href='{0}#{1}'>NIC {3}</a>" -f $temp[4],$temp[8],$temp[10],$temp[8]
+                            $link = $linkint -f $temp[8],$temp[8]
+                            $link2 = $linkext -f $temp[4],$temp[4]
+                            $attachedText = "{0} on NIC {1} (in {2}" -f $temp[10],$link,$link2
                         } else {
                             $attachedText="nothing"
                         }
-                        $detailtable += "
-                <tr>
-                    <td>
-                        IP address
-                    </td>
-                    <td colspan=2>
-                        {0}
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        Allocation method
-                    </td>
-                    <td colspan=2>
-                        {1}
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        SKU
-                    </td>
-                    <td colspan=2>
-                        {2}
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        DNS FQDN
-                    </td>
-                    <td colspan=2>
-                        {3}
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        attached to
-                    </td>
-                    <td colspan=2>
-                        {4}
-                    </td>
-                </tr>
-
-                        " -f $pip.IpAddress, $pip.PublicIpAllocationMethod, $pip.Sku.Name, $pip.DnsSettings.Fqdn,$attachedText
-
-                        
-                    }
+                        $detailtable += $rowdetail -f "IPAddress",$pip.IpAddress
+                        $detailtable += $rowdetail -f "AllocationMethod",$pip.PublicIpAllocationMethod
+                        $detailtable += $rowdetail -f "SKU",$pip.Sku.Name
+                        $detailtable += $rowdetail -f "DNS FQDN",$pip.DnsSettings.Fqdn
+                        $detailtable += $rowdetail -f "attachedTo",$attachedText
+                    }#publicIP handler
 
 
 
 
 
                     Default {
-                        $detailtable +="
-                <tr>
-                    <td colspan=2>
-                        no handler found
-                    </td>
-                </tr>
-                        "
+                        $detailtable += $rowdetail -f "no handler found","&nbsp;"
                     }
                 }
 
-                $detailtable+="</table>"
+                $detailtable += "</table>"
             }
             $outputRG += "
             {0}
