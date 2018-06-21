@@ -17,8 +17,24 @@ Param(
     [parameter(mandatory=$false)][string]$outdir
 )
 
+$now=(get-date -UFormat "%Y%m%d%H%M%S").ToString()
+
+if ($outdir.Length -eq 0){
+    $outdir=$env:TEMP + "\report"+$now
+}
+
+
+if(!(Test-Path -Path $outdir )){
+    $dummy=New-Item -ItemType directory -Path $outdir
+}
+
+$outmain="main"
+$outputmainfile="{0}\{1}.htm" -f $outdir,$outmain
+
+write-host "writing inventory to $outputmainfile" -ForegroundColor "yellow"
+
 $displayname=@{}
-$displayname.Add('Microsoft.Compute/virtualMachines ','VM')
+$displayname.Add('Microsoft.Compute/virtualMachines','VM')
 $displayname.add('Microsoft.Compute/disks','Disk')
 $displayname.add('Microsoft.Compute/virtualMachines/extensions','VM extension')
 $displayname.add('Microsoft.Network/networkInterfaces','NIC')
@@ -45,82 +61,7 @@ $RGSelected = @{}
 # we should stop on this:
 $FatalError= 0
 
-
-# already logged in?
-try
-{
-    Get-AzureRMContext | out-null 
-}
-catch
-{
-    $ErrorMessage = $_.Exception.Message
-#    $FailedItem = $_.Exception.ItemName
-}
-
-# Houston, do we have a problem?
-
-if ($ErrorMessage -like '*login*'){
-    # PS module installed, but not login.
-    Login-AzureRmAccount
-} elseif ($ErrorMessage -like '*credentials*'){
-    Login-AzureRmAccount
-} elseif ($ErrorMessage -like '*not recognized as the name of a cmdlet*'){
-    # PS module not installed
-    write-host "Looks like Azure PS module not installed. Please visit: https://azure.microsoft.com/en-us/documentation/articles/powershell-install-configure/"
-    $FatalError = 1
-} elseif ($ErrorMessage -like '*Object reference not set to an instance of an object*'){
-    # no internet?
-    write-host "Problem with your internet connection?"
-    $FatalError = 1
-} elseif ($ErrorMessage){
-    #anything else?
-    write-host "uups. something went wrong. please check:"
-    write-host $ErrorMessage -ForegroundColor "Red"
-    $FatalError = 1
-}
-
-
-
-
-
-# If nothing fatal occurred we will go forward.
-if ($FatalError -eq 0){
-    #pick the subscription first
-    Get-AzureRmSubscription | select-object Name,ID,state |Out-GridView -Title "Select subscription" -OutputMode Single | ForEach-Object {
-        $sub = Get-AzureRmSubscription -subscriptionName $_.Name
-    }
-
-    "working on {0}" -f $sub.Name
-    #pick the resourcegroups to examine
-    $Resourcegroups = Get-AzureRmResourceGroup
-    $Resourcegroups | Select-Object ResourceGroupName,ResourceId | Out-GridView -Title "Select Resourcegroups (use Ctrl)" -PassThru | ForEach-Object {
-       $RGSelected.Add($_.ResourceGroupName, $_.ResourceID)
-    }
-    $nrRGSelected = $RGSelected.Count
-    $nrRG = $resourcegroups.Count
-
-    # at least one should be selected...
-    if ($nrRGSelected -gt 0){
-        
-        #so finally here we go
-        $now=(get-date -UFormat "%Y%m%d%H%M%S").ToString()
-
-        if ($outdir.Length -eq 0){
-            $outdir=$env:TEMP + "\report"+$now
-        }
-        
-        "start inventory at {0}\main.htm" -f $outdir
-
-        if(!(Test-Path -Path $outdir )){
-            $dummy=New-Item -ItemType directory -Path $outdir
-        }
-
-        $outputmainfile="{0}\main.htm" -f $outdir
-
-
-        $Resources=Get-AzureRmResource 
-        $nrResources=$Resources.count
-
+#define some HTML stuff here...
         #define global HEAD
         $outputhead = "
         <html>
@@ -159,9 +100,8 @@ if ($FatalError -eq 0){
         </head>
         "
 
-        #define a standard table row
-        $intlink = "<a href='#{0}'>{1}</a>"
-        $extlink = "<a href='{0}.htm'>{1}</a>"
+        $linkint = "<a href='#{0}'>{1}</a>"
+        $linkext = "<a href='{0}.htm'>{1}</a>"
 
         $table = "
         <table id=inventory width='{0}%'>
@@ -225,6 +165,72 @@ if ($FatalError -eq 0){
         </tr>
         "
 
+
+# already logged in?
+try
+{
+    Get-AzureRMContext | out-null 
+}
+catch
+{
+    $ErrorMessage = $_.Exception.Message
+#    $FailedItem = $_.Exception.ItemName
+}
+
+# Houston, do we have a problem?
+
+if ($ErrorMessage -like '*login*'){
+    # PS module installed, but not login.
+    Login-AzureRmAccount
+} elseif ($ErrorMessage -like '*credentials*'){
+    Login-AzureRmAccount
+} elseif ($ErrorMessage -like '*not recognized as the name of a cmdlet*'){
+    # PS module not installed
+    write-host "Looks like Azure PS module not installed. Please visit: https://azure.microsoft.com/en-us/documentation/articles/powershell-install-configure/"
+    $FatalError = 1
+} elseif ($ErrorMessage -like '*Object reference not set to an instance of an object*'){
+    # no internet?
+    write-host "Problem with your internet connection?"
+    $FatalError = 1
+} elseif ($ErrorMessage){
+    #anything else?
+    write-host "uups. something went wrong. please check:"
+    write-host $ErrorMessage -ForegroundColor "Red"
+    $FatalError = 1
+}
+
+
+
+
+
+# If nothing fatal occurred we will go forward.
+if ($FatalError -eq 0){
+    #pick the subscription first. if there is only one, take that.
+
+    if ((Get-AzureRmSubscription).count -eq 1){
+        $sub= Get-AzureRmSubscription
+    } else {
+        Get-AzureRmSubscription | select-object Name,ID,state |Out-GridView -Title "Select subscription" -OutputMode Single | ForEach-Object {
+            $sub = Get-AzureRmSubscription -subscriptionName $_.Name
+        }
+    }
+
+    "working on {0}" -f $sub.Name
+    #pick the resourcegroups to examine
+    $Resourcegroups = Get-AzureRmResourceGroup
+    $Resourcegroups | Select-Object ResourceGroupName,ResourceId | Out-GridView -Title "Select Resourcegroups (use Ctrl)" -PassThru | ForEach-Object {
+       $RGSelected.Add($_.ResourceGroupName, $_.ResourceID)
+    }
+    $nrRGSelected = $RGSelected.Count
+    $nrRG = $resourcegroups.Count
+
+    # at least one should be selected...
+    if ($nrRGSelected -gt 0){
+        
+        $Resources=Get-AzureRmResource 
+        $nrResources=$Resources.count
+
+
          
 ###### start with the overview page
         $outputmain = $outputhead 
@@ -253,14 +259,14 @@ if ($FatalError -eq 0){
 
         foreach ($RG in $RGSelected.Keys) {
             $thisRG=Get-AzureRmResourceGroup -Name $RG
-            $link = $extlink -f $RG,$RG
+            $link = $linkext -f $RG,$RG
             $outputmain += $row -f $link,$thisRG.Location
 
             $rgnumber++
             $rnumber=0
 
 
-            $outputRG = $outputhead +"<h1>{0}. Resourcegroup {1}</h1>" -f $rgnumber,$RG
+            $outputRG = $outputhead +"<h1><a name='top'>{0}</a>. Resourcegroup {1}</h1>" -f $rgnumber,$RG
 
             ### do we have a RG with Tags?
             if ($thisRG.tags.keys.length -gt 0){
@@ -288,7 +294,7 @@ if ($FatalError -eq 0){
             $Resources | Where-Object {$_.resourcegroupname -eq $RG}| ForEach-Object {
                 $rnumber++
                 $thisresource=$_
-                $link = $intlink -f $thisresource.Name,$thisresource.Name
+                $link = $linkint -f $thisresource.Name,$thisresource.Name
                 $resourcetable += $row -f $link,$thisresource.resourcetype
 
                 ### for the sake of readbility we replace the resourcetype with a more friendly name (see top)
@@ -369,8 +375,8 @@ if ($FatalError -eq 0){
                         $linkedVMId = $nic.VirtualMachine.Id
                         if ($linkedVMId){
                             $linkedVM = Get-AzureRmResource -ResourceId $linkedVMId
-                            $link = $intlink -f $linkedVM.Name,$linkedVM.Name
-                            $link2 = $extlink -f $linkedVM.Resourcegroupname,$linkedVM.Resourcegroupname
+                            $link = $linkint -f $linkedVM.Name,$linkedVM.Name
+                            $link2 = $linkext -f $linkedVM.Resourcegroupname,$linkedVM.Resourcegroupname
                             $attachedText = "{0} (in {1})" -f $link,$link2
                             $detailtable += $rowdetail -f "attachedTo",$attachedText
                         } else {
@@ -396,7 +402,7 @@ if ($FatalError -eq 0){
                             $temp=$attached.id.split("/")
                             $link = $linkint -f $temp[8],$temp[8]
                             $link2 = $linkext -f $temp[4],$temp[4]
-                            $attachedText = "{0} on NIC {1} (in {2}" -f $temp[10],$link,$link2
+                            $attachedText = "{0} on NIC {1} (in {2})" -f $temp[10],$link,$link2
                         } else {
                             $attachedText="nothing"
                         }
@@ -417,14 +423,17 @@ if ($FatalError -eq 0){
                 }
 
                 $detailtable += "</table>"
+                $detailtable += $linkint -f "top","[top]"
             }
+            $link=$linkext -f $outmain,"[main]"
             $outputRG += "
             {0}
             </table>
-            {1}
+            <p>{1}</p>
+            {2}
         </body>
         </html>
-            " -f $resourcetable,$detailtable
+            " -f $resourcetable,$link,$detailtable
 
             $outputfile="{0}\{1}.htm" -f $outdir,$RG
             $outputRG | Out-File -filepath $outputfile
