@@ -102,6 +102,7 @@ $FatalError= 0
 
         $linkint = "<a href='#{0}'>{1}</a>"
         $linkext = "<a href='{0}.htm'>{1}</a>"
+        $linkabs = "<a href='{0}.htm#{1}'>{2}</a>"
 
         $table = "
         <table id=inventory width='{0}%'>
@@ -400,7 +401,7 @@ if ($FatalError -eq 0){
                         $attached=$pip.IpConfiguration
                         if ($attached.length -gt 0){
                             $temp=$attached.id.split("/")
-                            $link = $linkint -f $temp[8],$temp[8]
+                            $link = $linkext -f $temp[8],$temp[8]
                             $link2 = $linkext -f $temp[4],$temp[4]
                             $attachedText = "{0} on NIC {1} (in {2})" -f $temp[10],$link,$link2
                         } else {
@@ -413,9 +414,41 @@ if ($FatalError -eq 0){
                         $detailtable += $rowdetail -f "attachedTo",$attachedText
                     }#publicIP handler
 
+###### Microsoft.Compute/virtualMachines/extensions
+                    "Microsoft.Compute/virtualMachines/extensions"{
+                        $temp=$thisresource.name.split("/")
+                        $vmext=Get-AzureRmVMExtension -ResourceGroupName $rg -VMName $temp[0] -Name $temp[1]
+                        $link = $linkext -f $RG,$vmext.VMName,$vmext.VMName
+                        $detailtable += $rowdetail -f "attached to",$link
+                        $detailtable += $rowdetail -f "ExtensionType",$vmext.ExtensionType
+                        $detailtable += $rowdetail -f "TypeHandlerVersion",$vmext.TypeHandlerVersion
+                    }#vm extension
 
+###### Microsoft.KeyVault/vaults
+                    "Microsoft.KeyVault/vaults"{
+                        $vault=Get-AzureRmKeyVault -VaultName $thisresource.Name
+                        $link= $linkext -f $vault.VaultUri,$vault.VaultUri
+                        $detailtable += $rowdetail -f "VaultURI",$link
+                        $detailtable += $rowdetail -f "SKU",$vault.Sku
+                        $detailtable += $rowdetail -f "EnabledForDeployment",$vault.EnabledForDeployment
+                        $detailtable += $rowdetail -f "EnabledForTemplateDeployment",$vault.EnabledForTemplateDeployment
+                        $detailtable += $rowdetail -f "EnabledForDiskEncryption",$vault.EnabledForDiskEncryption
+                    }#AKV
 
+###### Microsoft.Compute/disks
+                    "Microsoft.Compute/disks" {
+                        $disk = Get-AzureRmDisk -ResourceGroupName $RG -DiskName $thisresource.Name 
+                        $temp = $disk.ManagedBy.split("/")
+                        $linkr = $linkabs -f $temp[4],$temp[8],$temp[8]
+                        $linkrg  = $linkabs -f $temp[4],"top",$temp[4]
+                        $attachedText = "{0} (in {1}" -f $linkr,$linkrg
+                        $detailtable += $rowdetail -f "managedBy",$attachedText 
+                        $detailtable += $rowdetail -f "OSType",$disk.OsType
+                        $detailtable += $rowdetail -f "Disksize [GB]",$disk.DiskSizeGB
+                        $detailtable += $rowdetail -f "EncryptionSettings",$disk.EncryptionSettings
+                        #$detailtable += $rowdetail -f "sku",$disk.Sku
 
+                    }                    
 
                     Default {
                         $detailtable += $rowdetail -f "no handler found","&nbsp;"
