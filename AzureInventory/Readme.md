@@ -10,7 +10,7 @@ Here is a list of what's currently listed, check back, the list will grow contin
 - [x] Microsoft.Storage/storageAccounts
 - [x] Microsoft\.Web/serverFarms
 - [x] Microsoft\.Web/sitxs
-- [ ] Microsoft.Compute/disks
+- [x] Microsoft.Compute/disks
 - [x] Microsoft.Compute/virtualMachines/extensions
 - [ ] Microsoft.Network/networkSecurityGroups
 - [ ] Microsoft.Network/virtualNetworks
