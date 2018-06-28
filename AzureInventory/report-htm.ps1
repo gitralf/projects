@@ -14,8 +14,20 @@
 #>
 
 Param(
-    [parameter(mandatory=$false)][string]$outdir
+    [parameter(mandatory=$false)][string]$outdir,
+    [parameter(mandatory=$false)][string]$subscription,
+    [parameter(mandatory=$false)][string]$resourcegroup
 )
+
+
+function add-line {
+    Param (
+        [parameter(mandatory="true")][string]$table,
+        [parameter(mandatory="true")][string]$left,
+        [parameter(mandatory="true")][string]$right,
+        [parameter(mandatory="false")][boolean]$isheader
+    )
+}
 
 $now=(get-date -UFormat "%Y%m%d%H%M%S").ToString()
 
@@ -54,6 +66,7 @@ $displayname.add('Microsoft.Web/sites','Website')
 
 
 $ErrorActionPreference = "SilentlyContinue"
+$WarningActionPreference = "SilentlyContinue"
 
 # save the resourcegroups to be inspected in a hashtable.
 $RGSelected = @{}
@@ -67,7 +80,7 @@ $FatalError= 0
         <html>
         <head>
         <style>
-        #inventory {
+        #inventory, #inventory2 {
             font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;
             border-collapse: collapse;
         }
@@ -76,21 +89,33 @@ $FatalError= 0
             font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;
         }
 
-        #inventory td, #inventory th {
+        #inventory td, #inventory th, #inventory2 td {
             border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
         }
         
-        #inventory tr:nth-child(even){background-color: #f2f2f2;}
+        #inventory tr:nth-child(even), #inventory2 tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
         
-        #inventory tr:hover {background-color: #ddd;}
+        #inventory tr:hover, #inventory2 tr:hover {
+            background-color: #ddd;
+        }
         
         #inventory th {
             padding-top: 12px;
             padding-bottom: 12px;
             text-align: left;
             background-color: #4CAF50;
+            color: white;
+        }
+
+        #inventory2 th {
+            padding-top: 6px;
+            padding-bottom: 6px;
+            text-align: left;
+            background-color: #4c004c;
             color: white;
         }
         </style>
@@ -107,13 +132,16 @@ $FatalError= 0
         $table = "
         <table id=inventory width='{0}%'>
         "
+        $table2= "
+        <table id=inventory2 width='{0}%'>
+        "
 
         $rowhead="
         <tr>
-            <th>
+            <th width='33%'>
                 {0}
             </th>
-            <th>
+            <th width='67%'>
                 {1}
             </th>
         </tr>
@@ -121,10 +149,10 @@ $FatalError= 0
 
         $rowdetailhead="
         <tr>
-            <th>
+            <th width='33%'>
                 {0}
             </th>
-            <th colspan=2>
+            <th colspan=2 width='67%'>
                 {1}
             </th>
         </tr>
@@ -132,10 +160,10 @@ $FatalError= 0
 
         $row="
         <tr>
-            <td>
+            <td width='33%'>
                 {0}
             </td>
-            <td>
+            <td width='67%'>
                 {1}
             </td>
         </tr>
@@ -143,10 +171,10 @@ $FatalError= 0
 
         $rowdetail="
         <tr>
-            <td>
+            <td width='33%'>
                 {0}
             </td>
-            <td colspan=2>
+            <td colspan=2 width='67%'>
                 {1}
             </td>
         </tr>
@@ -154,13 +182,13 @@ $FatalError= 0
 
         $row3detail="
         <tr>
-            <td>
+            <td width='33%'>
                 {0}
             </td>
-            <td>
+            <td width='33%'>
                 {1}
             </td>
-            <td>
+            <td width='33%'>
                 {2}
             </td>
         </tr>
@@ -206,21 +234,33 @@ if ($ErrorMessage -like '*login*'){
 
 # If nothing fatal occurred we will go forward.
 if ($FatalError -eq 0){
-    #pick the subscription first. if there is only one, take that.
-
-    if ((Get-AzureRmSubscription).count -eq 1){
-        $sub= Get-AzureRmSubscription
+    #pick the subscription first. if there is only one, take that. 
+    #If a subscriptionID was given as parameter, tkae this without checking
+    if ($subscriptionID){
+        $sub = Get-AzureRmSubscription -SubscriptionId $subscriptionID
     } else {
-        Get-AzureRmSubscription | select-object Name,ID,state |Out-GridView -Title "Select subscription" -OutputMode Single | ForEach-Object {
-            $sub = Get-AzureRmSubscription -subscriptionName $_.Name
+        if ((Get-AzureRmSubscription).count -eq 1){
+            "only one subscription found, skipping selection..." 
+            $sub= Get-AzureRmSubscription
+        } else {
+            Get-AzureRmSubscription | select-object Name,ID,state |Out-GridView -Title "Select subscription" -OutputMode Single | ForEach-Object {
+                $sub = Get-AzureRmSubscription -subscriptionName $_.Name
+            }
         }
     }
 
-    "working on {0}" -f $sub.Name
-    #pick the resourcegroups to examine
     $Resourcegroups = Get-AzureRmResourceGroup
-    $Resourcegroups | Select-Object ResourceGroupName,ResourceId | Out-GridView -Title "Select Resourcegroups (use Ctrl)" -PassThru | ForEach-Object {
-       $RGSelected.Add($_.ResourceGroupName, $_.ResourceID)
+    if ($resourcegroup){
+        "Resourcegroup defined on commandline, skipping selection..."
+        $temp = Get-AzureRmResourceGroup -name $resourcegroup
+        $RGSelected.Add($temp.Resourcegroupname, $temp.ResourceID)
+    } else {
+        "Please select at least one resourcegroup in subscription '{0}'" -f $sub.Name
+        #pick the resourcegroups to examine
+
+        $Resourcegroups | Select-Object ResourceGroupName,ResourceId | Out-GridView -Title "Select Resourcegroups (use Ctrl)" -PassThru | ForEach-Object {
+            $RGSelected.Add($_.ResourceGroupName, $_.ResourceID)
+        }
     }
     $nrRGSelected = $RGSelected.Count
     $nrRG = $resourcegroups.Count
@@ -293,25 +333,30 @@ if ($FatalError -eq 0){
 ###### this seems to be faster than Find-AzureRmResource -ResourceGroupNameContains
 
             $Resources | Where-Object {$_.resourcegroupname -eq $RG}| ForEach-Object {
+                #first build a list of all resources in this RG on top of the page (do this res by res as they are examined)
                 $rnumber++
                 $thisresource=$_
                 $link = $linkint -f $thisresource.Name,$thisresource.Name
                 $resourcetable += $row -f $link,$thisresource.resourcetype
 
-                ### for the sake of readbility we replace the resourcetype with a more friendly name (see top)
+                ### for the sake of readability we replace the resourcetype with a more friendly name (see top)
                 if ($displayname.ContainsKey($thisresource.resourcetype)){
                     $display=$displayname.($thisresource.resourcetype)
                 } else {
                     $display="Resource"
                 }
 
+                ### create a detailtable for each resource
                 $detailtable += "<h3><a name='{0}'>{1}.{2} {3} '{4}' in resourcegroup {5}</a></h3>" -f $thisresource.name,$rgnumber,$rnumber,$display,$thisresource.Name,$RG
                 $detailtable += $table -f "50"
                 $detailtable += $rowdetailhead -f "Attribute","Value"
                 $detailtable += $rowdetail -f "ResourceType",$thisresource.resourcetype
 
+                ###do we have tags on the resource? if so, put them at the beginning
+
                 foreach ($key in $thisresource.tags.keys){
-                    $detailtable += $rowdetail -f $key, $thisresource.tags[$key]
+                    $thistag="Tag: {0}" -f $key
+                    $detailtable += $rowdetail -f $thistag, $thisresource.tags[$key]
                 }
 
 ###### this is where the magic happens
@@ -360,13 +405,45 @@ if ($FatalError -eq 0){
 
 ######## Microsoft.Sql/servers
                     "Microsoft.Sql/servers" {
+                        $sql = Get-AzureSqlDatabaseServer -ServerName $thisresource.name 
                         $detailtable += $rowdetail -f "Kind",$thisresource.Kind
+                        $detailtable += $rowdetail -f "Location",$sql.Location
+                        $detailtable += $rowdetail -f "Version",$sql.Version
+                        $detailtable += $rowdetail -f "State",$sql.State
+                        $detailtable += $rowdetail -f "AdminLogin",$sql.AdministratorLogin
+                        $sqlfw=Get-AzureSqlDatabaseServerFirewallRule -ServerName $thisresource.Name
+                        if ($sqlfw.length -gt 0){
+                            $detailtable += "</table>"
+                            $detailtable += $table2 -f "50"
+                            $detailtable += $rowdetailhead -f "firewallRules","&nbsp;"
+                            $detailtable += $row3detail -f "Name","StartIpAddress","EndIpAddress"
+                            $sqlfw | foreach-object {
+                                $detailtable += $row3detail -f $_.Rulename, $_.StartIpAddress, $_.EndIpAddress
+                            }
+                        }
+                        $sqldb = Get-AzureSqlDatabase -ServerName $thisresource.Name 
+                        if ($sqldb.length -gt 0){
+                            $detailtable += "</table>"
+                            $detailtable += $table2 -f "50"
+                            $detailtable += $rowdetailhead -f "Databases","&nbsp;"
+                            $detailtable += $row3detail -f "Name","Edition","Collation"
+                            $sqldb | foreach-object {
+                                $edition = "{0}, {1}" -f $_.ServiceObjectiveName,$_.$_.Edition
+                                $detailtable += $row3detail -f $_.Name,$edition,$_.CollationName
+                            }
+                        }
                     }#sql server handler
 
 
 ######## Microsoft.Sql/servers/databases
                     "Microsoft.Sql/servers/databases" {
+                        $names = $thisresource.name.split("/")
+                        $sql = Get-AzureSqlDatabase -ServerName $names[0] -DatabaseName $names[1]
                         $detailtable += $rowdetail -f "Kind",$thisresource.Kind
+                        $detailtable += $rowdetail -f "DBName",$sql.name
+                        $detailtable += $rowdetail -f "Edition",$sql.edition
+                        $detailtable += $rowdetail -f "ServiceObjectiveName",$sql.ServiceObjectiveName
+                        $detailtable += $rowdetail -f "Collation",$sql.CollationName
                     }#database handler
 
 
@@ -384,13 +461,17 @@ if ($FatalError -eq 0){
                             $detailtable += $rowdetail -f "nothing"
                         }
 
-                        foreach ($ipconfig in $nic.IpConfigurations){
-                            $detailtable += $row3detail -f "IPconfig","Name",$ipconfig.name
-                            $detailtable += $row3detail -f "&nbsp;","PrivateIP",$ipconfig.PrivateIpAddress
-                            $detailtable += $row3detail -f "&nbsp;","AllocationMethodPrivateIP",$ipconfig.PrivateIPAllocationMethod
-                            
-                            $subnetID=$ipconfig.Subnet.Id
-                            $subnetparts=$subnetid.split("/")
+                        if (($nic.IpConfigurations).length -gt 0){
+                            foreach ($ipconfig in $nic.IpConfigurations){
+                                $detailtable += "</table>"
+                                $detailtable += $table2 -f "50"
+                                $detailtable += $rowdetailhead -f "IPConfiguration",$ipconfig.name
+                                $detailtable += $rowdetail -f "PrivateIP",$ipconfig.PrivateIpAddress
+                                $detailtable += $rowdetail -f "AllocationMethodPrivateIP",$ipconfig.PrivateIPAllocationMethod
+                                
+                                $subnetID=$ipconfig.Subnet.Id
+                                $subnetparts=$subnetid.split("/")
+                            }
                         }
                     }#nic handler
 
@@ -437,17 +518,17 @@ if ($FatalError -eq 0){
 
 ###### Microsoft.Compute/disks
                     "Microsoft.Compute/disks" {
-                        $disk = Get-AzureRmDisk -ResourceGroupName $RG -DiskName $thisresource.Name 
+                        $disk = Get-AzureRmDisk -ResourceGroupName $RG -DiskName $thisresource.Name -WarningAction "SilentlyContinue"
                         $temp = $disk.ManagedBy.split("/")
                         $linkr = $linkabs -f $temp[4],$temp[8],$temp[8]
                         $linkrg  = $linkabs -f $temp[4],"top",$temp[4]
-                        $attachedText = "{0} (in {1}" -f $linkr,$linkrg
+                        $attachedText = "{0} (in {1})" -f $linkr,$linkrg
                         $detailtable += $rowdetail -f "managedBy",$attachedText 
                         $detailtable += $rowdetail -f "OSType",$disk.OsType
                         $detailtable += $rowdetail -f "Disksize [GB]",$disk.DiskSizeGB
                         $detailtable += $rowdetail -f "EncryptionSettings",$disk.EncryptionSettings
+                        #later to be added. output will change...
                         #$detailtable += $rowdetail -f "sku",$disk.Sku
-
                     }                    
 
                     Default {
