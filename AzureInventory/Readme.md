@@ -9,20 +9,25 @@ Here is a list of what's currently reported, check back, the list will grow cont
 - [x] Microsoft.Compute/disks
 - [x] Microsoft.Network/networkInterfaces
 - [x] Microsoft.Network/publicIPAddresses
-- [ ] Microsoft.Network/networkSecurityGroups
-- [ ] Microsoft.Network/virtualNetworks
+- [x] Microsoft.Network/networkSecurityGroups
 - [x] Microsoft.Storage/storageAccounts
-- [ ] Microsoft.ClassicStorage/storageAccounts
 - [x] Microsoft\.Web/serverFarms
 - [x] Microsoft\.Web/sites
-- [ ] Microsoft.RecoveryServices/vaults
 - [X] Microsoft.KeyVault/vaults
-- [ ] Microsoft.OperationalInsights/workspaces
-- [ ] Microsoft.OperationsManagement/solutions
+- [ ] Microsoft.ClassicStorage/storageAccounts
+- [ ] Microsoft.Network/virtualNetworks
 
 
-also to come:
+also to come (?):
 - list of AAD users and groups in extra file
 - RBAC for each resourcegroup and resource
   - maybe with a switch for extended
-- build CSV additionally
+- build CSV overview of all resources additionally
+- other resource providers
+
+## Version history
+
+### 2.0
+
+- added NetworkSecurityGroups including SecurityRules and associations
+- fixed commandline selection of subscription (was ignored)

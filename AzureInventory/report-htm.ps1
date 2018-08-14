@@ -5,12 +5,18 @@
  .DESCRIPTION
     build inventory data of Azure resources based on subscription and/or resourcegroup scope. 
     select your subscription and the resource groups to be listed and there you go.
+    This is version 2.0
 
  .PARAMETER outdir
     Directory where all the output will go to (will be created if not found). 
     Different HTML pages will link to each other relatively, all in that directory.
     If left out, a directory in user TEMP will be created (with "report" and timestamp)
 
+ .PARAMETER subscription
+    Define a subscription. If not defined, try all subscriptions
+
+ .PARAMETER resourcegroup
+    Define a Resourcegroup. If not defined, try all resourcegroups
 #>
 
 Param(
@@ -32,19 +38,22 @@ function add-line {
 $now=(get-date -UFormat "%Y%m%d%H%M%S").ToString()
 
 if ($outdir.Length -eq 0){
+    # no outdir defined. use temp folder
     $outdir=$env:TEMP + "\report"+$now
 }
-
 
 if(!(Test-Path -Path $outdir )){
     $dummy=New-Item -ItemType directory -Path $outdir
 }
 
+#define the start of inventory
 $outmain="main"
 $outputmainfile="{0}\{1}.htm" -f $outdir,$outmain
 
+#tell it to the user
 write-host "writing inventory to $outputmainfile" -ForegroundColor "yellow"
 
+#define nicer names for the resource providers
 $displayname=@{}
 $displayname.Add('Microsoft.Compute/virtualMachines','VM')
 $displayname.add('Microsoft.Compute/disks','Disk')
@@ -75,10 +84,11 @@ $RGSelected = @{}
 $FatalError= 0
 
 #define some HTML stuff here...
-        #define global HEAD
-        $outputhead = "
-        <html>
-        <head>
+
+#define global HEAD
+$outputhead = "
+<html>
+    <head>
         <style>
         #inventory, #inventory2 {
             font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;
@@ -112,8 +122,8 @@ $FatalError= 0
         }
 
         #inventory2 th {
-            padding-top: 6px;
-            padding-bottom: 6px;
+            padding-top: 12px;
+            padding-bottom: 12px;
             text-align: left;
             background-color: #4c004c;
             color: white;
@@ -121,22 +131,23 @@ $FatalError= 0
         </style>
         <title>
                 Azure Inventory
-            </title>
-        </head>
-        "
+        </title>
+    </head>
+"
 
-        $linkint = "<a href='#{0}'>{1}</a>"
-        $linkext = "<a href='{0}.htm'>{1}</a>"
-        $linkabs = "<a href='{0}.htm#{1}'>{2}</a>"
+#define link format
+$linkext = "<a href='{0}.htm'>{1}</a>"
+$linkint = "<a href='#{0}'>{1}</a>"
+$linkabs = "<a href='{0}.htm#{1}'>{2}</a>"
 
-        $table = "
+$table = "
         <table id=inventory width='{0}%'>
-        "
-        $table2= "
+"
+$table2= "
         <table id=inventory2 width='{0}%'>
-        "
+"
 
-        $rowhead="
+$rowhead="
         <tr>
             <th width='33%'>
                 {0}
@@ -145,9 +156,9 @@ $FatalError= 0
                 {1}
             </th>
         </tr>
-        "
+"
 
-        $rowdetailhead="
+$rowdetailhead="
         <tr>
             <th width='33%'>
                 {0}
@@ -156,9 +167,10 @@ $FatalError= 0
                 {1}
             </th>
         </tr>
-        "
+"
 
-        $row="
+#normal table with 2 rows, 1:2
+$row="
         <tr>
             <td width='33%'>
                 {0}
@@ -167,9 +179,10 @@ $FatalError= 0
                 {1}
             </td>
         </tr>
-        "
+"
 
-        $rowdetail="
+#table with 3 rows, 2+3 spanning, 1:2
+$rowdetail="
         <tr>
             <td width='33%'>
                 {0}
@@ -178,9 +191,10 @@ $FatalError= 0
                 {1}
             </td>
         </tr>
-        "
+"
 
-        $row3detail="
+#table with 3 rows, all equal
+$row3detail="
         <tr>
             <td width='33%'>
                 {0}
@@ -235,15 +249,16 @@ if ($ErrorMessage -like '*login*'){
 # If nothing fatal occurred we will go forward.
 if ($FatalError -eq 0){
     #pick the subscription first. if there is only one, take that. 
-    #If a subscriptionID was given as parameter, tkae this without checking
-    if ($subscriptionID){
-        $sub = Get-AzureRmSubscription -SubscriptionId $subscriptionID
+    #If a subscriptionID was given as parameter, take this without checking
+    if ($subscription){
+        "Subscription defined on commandline, skipping selection..."
+        $sub = Get-AzureRmSubscription -SubscriptionId $subscription
     } else {
         if ((Get-AzureRmSubscription).count -eq 1){
             "only one subscription found, skipping selection..." 
             $sub= Get-AzureRmSubscription
         } else {
-            Get-AzureRmSubscription | select-object Name,ID,state |Out-GridView -Title "Select subscription" -OutputMode Single | ForEach-Object {
+            Get-AzureRmSubscription | select-object Name,ID,state |Out-GridView -Title "Select one subscription" -OutputMode Single | ForEach-Object {
                 $sub = Get-AzureRmSubscription -subscriptionName $_.Name
             }
         }
@@ -268,6 +283,7 @@ if ($FatalError -eq 0){
     # at least one should be selected...
     if ($nrRGSelected -gt 0){
         
+        # we collect all resources at once instead of iterating through each
         $Resources=Get-AzureRmResource 
         $nrResources=$Resources.count
 
@@ -333,20 +349,22 @@ if ($FatalError -eq 0){
 ###### this seems to be faster than Find-AzureRmResource -ResourceGroupNameContains
 
             $Resources | Where-Object {$_.resourcegroupname -eq $RG}| ForEach-Object {
-                #first build a list of all resources in this RG on top of the page (do this res by res as they are examined)
+                # first build a list of all resources in this RG on top of the page 
+                # do this for each resource as it is inspected
                 $rnumber++
                 $thisresource=$_
                 $link = $linkint -f $thisresource.Name,$thisresource.Name
                 $resourcetable += $row -f $link,$thisresource.resourcetype
 
-                ### for the sake of readability we replace the resourcetype with a more friendly name (see top)
+                ### for better readability we replace the resourcetype with a more friendly name (see top)
                 if ($displayname.ContainsKey($thisresource.resourcetype)){
                     $display=$displayname.($thisresource.resourcetype)
                 } else {
                     $display="Resource"
                 }
 
-                ### create a detailtable for each resource
+                ### create a detailtable for each resource. header is equal for all resource types, 
+                ### the different atrributes follow after the switch further down
                 $detailtable += "<h3><a name='{0}'>{1}.{2} {3} '{4}' in resourcegroup {5}</a></h3>" -f $thisresource.name,$rgnumber,$rnumber,$display,$thisresource.Name,$RG
                 $detailtable += $table -f "50"
                 $detailtable += $rowdetailhead -f "Attribute","Value"
@@ -527,10 +545,55 @@ if ($FatalError -eq 0){
                         $detailtable += $rowdetail -f "OSType",$disk.OsType
                         $detailtable += $rowdetail -f "Disksize [GB]",$disk.DiskSizeGB
                         $detailtable += $rowdetail -f "EncryptionSettings",$disk.EncryptionSettings
-                        #later to be added. output will change...
+                        # sku to be added later. output will change...
                         #$detailtable += $rowdetail -f "sku",$disk.Sku
                     }                    
 
+###### Microsoft.Network/networkSecurityGroups
+                    "Microsoft.Network/networkSecurityGroups" {
+                        $nsg = Get-AzureRmNetworkSecurityGroup -ResourceGroupName $RG
+                        if ($nsg.Subnets.Count+$nsg.NetworkInterfaces.count -lt 1){
+                            $detailtable += $rowdetail -f "associated with ","nothing"
+                        } else {
+                            if ($nsg.Subnets.count -gt 0){
+                                foreach ($subnet in $nsg.Subnets) {
+                                    $temp=$subnet.id.split("/")
+                                    $link= $linkabs -f $temp[4],$temp[8],$temp[8]
+                                    $attachedText="subnet {0} (in vnet {1})" -f $temp[10],$link 
+                                    $detailtable += $rowdetail -f "associated with",$attachedText
+                                }
+                            }
+                            if ($nsg.NetworkInterfaces.Count -gt 0){
+                                foreach ($nic in $nsg.NetworkInterfaces) {
+                                    $temp=$nic.id.split("/")
+                                    $link=$linkabs -f $temp[4],$temp[8],$temp[8]
+                                    $attachedText="NIC {0}" -f $link
+                                    $detailtable += $rowdetail -f "associated with",$attachedText
+                                }
+                            }
+                        }
+                        $detailtable += "</table>"
+                        $detailtable += $table2 -f "50"
+                        $detailtable += $rowdetailhead -f "SecurityRules","&nbsp;"
+                        $rules=Get-AzureRmNetworkSecurityRuleConfig -NetworkSecurityGroup $nsg|sort-object -Property Direction,Priority
+                        foreach ($rule in $rules){
+                            $detailtable += $row3detail -f $rule.Name,"Direction",$rule.Direction
+                            $detailtable += $row3detail -f "&nbsp;","Priority",$rule.Priority
+                            $detailtable += $row3detail -f "&nbsp;","Access",$rule.Access
+                            $detailtable += $row3detail -f "&nbsp;","Protocol",$rule.Protocol
+                            $temp=$rule.SourceAddressPrefix -join ","
+                            $detailtable += $row3detail -f "&nbsp;","SourceAddress",$temp
+                            $temp=$rule.SourcePortRange -join ","
+                            $detailtable += $row3detail -f "&nbsp;","SourcePort",$temp
+                            $temp=$rule.DestinationAddressPrefix -join ","
+                            $detailtable += $row3detail -f "&nbsp;","DestAddress",$temp
+                            $temp=$rule.DestinationPortRange -join ","
+                            $detailtable += $row3detail -f "&nbsp;","DestPort",$temp
+                        }
+                    }
+
+
+###### Default
                     Default {
                         $detailtable += $rowdetail -f "no handler found","&nbsp;"
                     }
@@ -545,8 +608,8 @@ if ($FatalError -eq 0){
             </table>
             <p>{1}</p>
             {2}
-        </body>
-        </html>
+    </body>
+</html>
             " -f $resourcetable,$link,$detailtable
 
             $outputfile="{0}\{1}.htm" -f $outdir,$RG
