@@ -5,7 +5,7 @@
  .DESCRIPTION
     build inventory data of Azure resources based on subscription and/or resourcegroup scope. 
     select your subscription and the resource groups to be listed and there you go.
-    This is version 2.0
+    This is version 2.1
 
  .PARAMETER outdir
     Directory where all the output will go to (will be created if not found). 
@@ -331,14 +331,14 @@ if ($FatalError -eq 0){
                 $outputRG += $rowhead -f "Tag","Value"
                         
                 foreach ($key in $thisRG.tags.keys){
-                    $outputRG += $row -f $key, $resourcegroup.tags[$key]
+                    $outputRG += $row -f $key, $thisRG.tags[$key]
                 }
 
                 $outputRG += "</table>"
             } #tags
 
             $outputRG += "<h2>All resources in resourcegroup {0}</h2>" -f $RG
-            $outputRG += $table -f "75"
+            $outputRG += $table -f "50"
             $outputRG += $rowhead -f "Resourcename","Type"
 
 ###### we create a table with the resource details (in $resourcetable)
@@ -551,7 +551,7 @@ if ($FatalError -eq 0){
 
 ###### Microsoft.Network/networkSecurityGroups
                     "Microsoft.Network/networkSecurityGroups" {
-                        $nsg = Get-AzureRmNetworkSecurityGroup -ResourceGroupName $RG
+                        $nsg = Get-AzureRmNetworkSecurityGroup -ResourceGroupName $RG -Name $thisresource.Name
                         if ($nsg.Subnets.Count+$nsg.NetworkInterfaces.count -lt 1){
                             $detailtable += $rowdetail -f "associated with ","nothing"
                         } else {
@@ -589,6 +589,29 @@ if ($FatalError -eq 0){
                             $detailtable += $row3detail -f "&nbsp;","DestAddress",$temp
                             $temp=$rule.DestinationPortRange -join ","
                             $detailtable += $row3detail -f "&nbsp;","DestPort",$temp
+                        }
+                    }
+###### Microsoft.Network/virtualNetworks
+                    "Microsoft.Network/virtualNetworks" {
+                        $vnet = Get-AzureRmVirtualNetwork -ResourceGroupName $RG -name $thisresource.Name
+                        $detailtable += $rowdetail -f "EnableDDoSProtection",$vnet.EnableDDoSProtection
+                        $detailtable += $rowdetail -f "EnableVmProtection",$vnet.EnableVmProtection
+                        $temp=$vnet.AddressSpace.AddressPrefixes -join ","
+                        $detailtable += $rowdetail -f "AddressPrefixes",$temp
+                        $detailtable += "</table>"
+                        $detailtable += $table2 -f "50"
+                        $detailtable += $rowdetailhead -f "Subnets","&nbsp;"
+                        
+                        foreach ($subnet in $vnet.Subnets){
+                            $detailtable += $row3detail -f $subnet.Name,"AddressPrefix",$subnet.AddressPrefix
+                            $temp=$subnet.networkSecurityGroup.id.split("/")
+                            $detailtable += $row3detail -f "&nbsp;","NSG",$temp[8]
+                            foreach ($ipconfig in $subnet.IpConfigurations){
+                                $temp=$subnet.IpConfigurations.id.split("/")
+                                $link=$linkabs -f $temp[4],$temp[8],$temp[8]
+                                $attachedText="{0} from NIC {1}" -f $temp[10],$link
+                                $detailtable += $row3detail -f "&nbsp;","associated with",$attachedText
+                            }
                         }
                     }
 

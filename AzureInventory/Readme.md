@@ -13,9 +13,9 @@ Here is a list of what's currently reported, check back, the list will grow cont
 - [x] Microsoft.Storage/storageAccounts
 - [x] Microsoft\.Web/serverFarms
 - [x] Microsoft\.Web/sites
-- [X] Microsoft.KeyVault/vaults
+- [x] Microsoft.KeyVault/vaults
+- [x] Microsoft.Network/virtualNetworks
 - [ ] Microsoft.ClassicStorage/storageAccounts
-- [ ] Microsoft.Network/virtualNetworks
 
 
 also to come (?):
@@ -26,6 +26,12 @@ also to come (?):
 - other resource providers
 
 ## Version history
+
+### 2.1
+
+- added Virtual Networks handler
+- fixed display of tags for resourcegroup
+- fixed table width for "all resources"
 
 ### 2.0
 
