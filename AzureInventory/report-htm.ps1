@@ -5,7 +5,7 @@
  .DESCRIPTION
     build inventory data of Azure resources based on subscription and/or resourcegroup scope. 
     select your subscription and the resource groups to be listed and there you go.
-    This is version 2.1
+    This is version 2.2
 
  .PARAMETER outdir
     Directory where all the output will go to (will be created if not found). 
@@ -500,7 +500,7 @@ if ($FatalError -eq 0){
                         $attached=$pip.IpConfiguration
                         if ($attached.length -gt 0){
                             $temp=$attached.id.split("/")
-                            $link = $linkext -f $temp[8],$temp[8]
+                            $link = $linkabs -f $temp[4],$temp[8],$temp[8]
                             $link2 = $linkext -f $temp[4],$temp[4]
                             $attachedText = "{0} on NIC {1} (in {2})" -f $temp[10],$link,$link2
                         } else {
