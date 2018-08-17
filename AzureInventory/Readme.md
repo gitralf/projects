@@ -27,13 +27,22 @@ also to come (?):
 
 ## Version history
 
-### 2.1
+### 2.3 (8/17/2018)
+
+- added extra file (resources.htm) with a list of all resources in all selected resourcegroups. Sort by Type, Groupname and Name.
+- added links in resources file back to resourcegroups and resources
+
+### 2.2 (8/15/2018)
+
+- fixed Public Ip link bug
+
+### 2.1 (8/14/2018)
 
 - added Virtual Networks handler
 - fixed display of tags for resourcegroup
 - fixed table width for "all resources"
 
-### 2.0
+### 2.0 (8/13/2018)
 
 - added NetworkSecurityGroups including SecurityRules and associations
 - fixed commandline selection of subscription (was ignored)

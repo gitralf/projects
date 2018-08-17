@@ -5,7 +5,7 @@
  .DESCRIPTION
     build inventory data of Azure resources based on subscription and/or resourcegroup scope. 
     select your subscription and the resource groups to be listed and there you go.
-    This is version 2.2
+    This is version 2.3
 
  .PARAMETER outdir
     Directory where all the output will go to (will be created if not found). 
@@ -26,15 +26,6 @@ Param(
 )
 
 
-function add-line {
-    Param (
-        [parameter(mandatory="true")][string]$table,
-        [parameter(mandatory="true")][string]$left,
-        [parameter(mandatory="true")][string]$right,
-        [parameter(mandatory="false")][boolean]$isheader
-    )
-}
-
 $now=(get-date -UFormat "%Y%m%d%H%M%S").ToString()
 
 if ($outdir.Length -eq 0){
@@ -48,12 +39,15 @@ if(!(Test-Path -Path $outdir )){
 
 #define the start of inventory
 $outmain="main"
+$outrp="resources"
 $outputmainfile="{0}\{1}.htm" -f $outdir,$outmain
+$outputrpfile="{0}\{1}.htm" -f $outdir,$outrp
 
 #tell it to the user
 write-host "writing inventory to $outputmainfile" -ForegroundColor "yellow"
 
 #define nicer names for the resource providers
+
 $displayname=@{}
 $displayname.Add('Microsoft.Compute/virtualMachines','VM')
 $displayname.add('Microsoft.Compute/disks','Disk')
@@ -158,6 +152,19 @@ $rowhead="
         </tr>
 "
 
+$row3head="
+        <tr>
+            <th width='33%'>
+                {0}
+            </th>
+            <th width='33%'>
+                {1}
+            </th>
+            <th width='33%'>
+                {2}
+            </th>
+        </tr>
+"
 $rowdetailhead="
         <tr>
             <th width='33%'>
@@ -289,25 +296,44 @@ if ($FatalError -eq 0){
 
 
          
-###### start with the overview page
+###### start with the overview page and the rp summary page
+
         $outputmain = $outputhead 
         $outputmain += "<body>"
         $outputmain += "<h1 id='top'>Azure Inventory</h1>"
-        $outputmain += $table -f "50"
-        $outputmain += $row -f "created",$now
-        $outputmain += $row -f "Tenant-ID",$sub.TenantId
-        $outputmain += $row -f "Subscription-ID",$sub.SubscriptionId
-        $outputmain += $row -f "Subscription name",$sub.Name
-        $outputmain += $row -f "Resourcegroups",$nrRG
-        $outputmain += $row -f "Total Resources",$nrResources
-        $outputmain += "</table>"
+        $outputmain +="<p>"
+        $outputmain += $linkext -f $outrp,"[all resources]"
+        $outputmain +="</p>"
+        
+        $outputrp = $outputhead
+        $outputrp += "<body>"
+        $outputrp += "<h1 id='top'>Azure Inventory - All Resources</h1>"
+        $outputrp +="<p>"
+        $outputrp += $linkext -f $outmain,"[main]"
+        $outputrp +="</p>"
+        
+        $outputtemp += $table -f "50"
+        $outputtemp += $row -f "created",$now
+        $outputtemp += $row -f "Tenant-ID",$sub.TenantId
+        $outputtemp += $row -f "Subscription-ID",$sub.SubscriptionId
+        $outputtemp += $row -f "Subscription name",$sub.Name
+        $outputtemp += $row -f "Resourcegroups",$nrRG
+        $outputtemp += $row -f "  selected",$nrRGSelected
+        $outputtemp += $row -f "Total Resources",$nrResources
+        $outputtemp += "</table>"
+
+        $outputmain+=$outputtemp
+        $outputrp += $outputtemp
+
         
 ###### we build a list of resourcegroups and - for each of them - a separate html file with the resources
         $outputmain += "<h1>Resourcegroups</h1><p>Total: {0}, Selected {1}</p>" -f $nrRG,$nrRGSelected
         $outputmain += $table -f "50"
         $outputmain += $rowhead -f "Resourcegroupname", "Location"
 
-        $rgnumber=0;
+
+        $summary =@()
+        $rgnumber=0
         $rnumber=0
 
 ###### here we start walking through all RGs and 
@@ -324,6 +350,11 @@ if ($FatalError -eq 0){
 
 
             $outputRG = $outputhead +"<h1><a name='top'>{0}</a>. Resourcegroup {1}</h1>" -f $rgnumber,$RG
+            $link=$linkext -f $outmain,"[main]"
+            $outputRG+="<p>
+            {0}
+            </p>
+            " -f $link
 
             ### do we have a RG with Tags?
             if ($thisRG.tags.keys.length -gt 0){
@@ -344,6 +375,7 @@ if ($FatalError -eq 0){
 ###### we create a table with the resource details (in $resourcetable)
             $resourcetable = ""
             $detailtable = ""
+            $summaryline = ""
 
 ###### and we walk through all Resources and filter out those in the current RG
 ###### this seems to be faster than Find-AzureRmResource -ResourceGroupNameContains
@@ -376,6 +408,14 @@ if ($FatalError -eq 0){
                     $thistag="Tag: {0}" -f $key
                     $detailtable += $rowdetail -f $thistag, $thisresource.tags[$key]
                 }
+
+                $summaryline=@{
+                    RG = $RG
+                    name = $thisresource.name
+                    type=$thisresource.resourcetype
+                }
+                $summary+=[PSCustomObject]$summaryline
+
 
 ###### this is where the magic happens
 ###### now we go for the real details. place a handler for each resourcetype here
@@ -619,21 +659,21 @@ if ($FatalError -eq 0){
 ###### Default
                     Default {
                         $detailtable += $rowdetail -f "no handler found","&nbsp;"
+                        "no handler found for {0}" -f $thisresource.resourcetype
                     }
                 }
 
                 $detailtable += "</table>"
                 $detailtable += $linkint -f "top","[top]"
             }
-            $link=$linkext -f $outmain,"[main]"
+
             $outputRG += "
             {0}
             </table>
-            <p>{1}</p>
-            {2}
+            {1}
     </body>
 </html>
-            " -f $resourcetable,$link,$detailtable
+            " -f $resourcetable,$detailtable
 
             $outputfile="{0}\{1}.htm" -f $outdir,$RG
             $outputRG | Out-File -filepath $outputfile
@@ -646,7 +686,30 @@ if ($FatalError -eq 0){
 </html>
         "
         $outputmain | Out-File -filepath $outputmainfile
+
+        $outputrp += "<h1>All Resources</h1>"
+        $outputrp += $table -f "50"
+        $outputrp += $row3head -f "ResourceType","Resourcegroupname","ResourceName"
+        foreach ($line in $summary | sort-object -Property type,RG,name){
+            $link1=$linkext -f $line.RG,$line.RG
+            $link2=$linkabs -f $line.RG,$line.name,$line.name
+            $outputrp += $row3detail -f $line.type,$link1,$link2
+        }
+
+        
+        $outputrp+="
+        </table>
+    </body>
+</html>
+        "
+        $outputrp | Out-File -filepath $outputrpfile
+
     }
 } else {
     write-host "nothing done" -ForegroundColor "Red"
 }
+
+
+
+
+$outputrp += "<h1>All Resources</h1>"
