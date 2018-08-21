@@ -1,22 +1,21 @@
 <#
  .SYNOPSIS
-    create a HTML report of Azure resources
+    Create a HTML report of Azure resources. v2.4
 
  .DESCRIPTION
-    build inventory data of Azure resources based on subscription and/or resourcegroup scope. 
-    select your subscription and the resource groups to be listed and there you go.
-    This is version 2.3
-
+    Build inventory data of Azure resources based on subscription and/or resourcegroup scope. 
+    Select your subscription and the resource groups to be listed and there you go.
+  
  .PARAMETER outdir
     Directory where all the output will go to (will be created if not found). 
     Different HTML pages will link to each other relatively, all in that directory.
     If left out, a directory in user TEMP will be created (with "report" and timestamp)
 
  .PARAMETER subscription
-    Define a subscription. If not defined, try all subscriptions
+    Define a subscription. If not defined, present a list to pick one.
 
  .PARAMETER resourcegroup
-    Define a Resourcegroup. If not defined, try all resourcegroups
+    Define a resourcegroup. If not defined, preset a list to pick at least one (or multiple with CTRL)
 #>
 
 Param(
@@ -27,6 +26,7 @@ Param(
 
 
 $now=(get-date -UFormat "%Y%m%d%H%M%S").ToString()
+$nownice=(get-date -UFormat "%d.%m.%Y %H:%M")
 
 if ($outdir.Length -eq 0){
     # no outdir defined. use temp folder
@@ -70,9 +70,6 @@ $displayname.add('Microsoft.Web/sites','Website')
 
 $ErrorActionPreference = "SilentlyContinue"
 $WarningActionPreference = "SilentlyContinue"
-
-# save the resourcegroups to be inspected in a hashtable.
-$RGSelected = @{}
 
 # we should stop on this:
 $FatalError= 0
@@ -271,6 +268,9 @@ if ($FatalError -eq 0){
         }
     }
 
+    # save the resourcegroups to be inspected in a hashtable.
+    $RGSelected = @{}
+
     $Resourcegroups = Get-AzureRmResourceGroup
     if ($resourcegroup){
         "Resourcegroup defined on commandline, skipping selection..."
@@ -313,7 +313,7 @@ if ($FatalError -eq 0){
         $outputrp +="</p>"
         
         $outputtemp += $table -f "50"
-        $outputtemp += $row -f "created",$now
+        $outputtemp += $row -f "created",$nownice
         $outputtemp += $row -f "Tenant-ID",$sub.TenantId
         $outputtemp += $row -f "Subscription-ID",$sub.SubscriptionId
         $outputtemp += $row -f "Subscription name",$sub.Name
@@ -340,7 +340,7 @@ if ($FatalError -eq 0){
 ###### add a line to the main html page ($outputmain) and 
 ###### new html content with the resources of that RG (in $outputRG)
 
-        foreach ($RG in $RGSelected.Keys) {
+        foreach ($RG in $RGSelected.Keys | sort-object) {
             $thisRG=Get-AzureRmResourceGroup -Name $RG
             $link = $linkext -f $RG,$RG
             $outputmain += $row -f $link,$thisRG.Location

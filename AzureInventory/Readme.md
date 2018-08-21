@@ -1,7 +1,19 @@
 # Azure Inventory
 
-reads all the details of your resources and reports them in HTML format.
+PowerShell script to read the details of ARM resources and reports them in HTML format.
 
+Usage:
+
+```
+report-htm.ps1 [-outdir <path>] [-subscription <subscriptionID>] [-resourcegroup <resourcegroup>]
+```
+
+- default path is a subdirectory in user temp
+- if subscription is not provided, will present list of subscriptions to pick one
+- if resourcegroup is not provided, will present a list to select at least one resourcegroup
+
+Creates a [main.htm](demo/main.htm) file and one for each resourcegroup. Follow link to see a demo output.
+ 
 Here is a list of what's currently reported, check back, the list will grow continuously (and attributes might be added to the report).
 
 - [x] Microsoft.Compute/virtualMachines
@@ -15,17 +27,21 @@ Here is a list of what's currently reported, check back, the list will grow cont
 - [x] Microsoft\.Web/sites
 - [x] Microsoft.KeyVault/vaults
 - [x] Microsoft.Network/virtualNetworks
-- [ ] Microsoft.ClassicStorage/storageAccounts
 
+Maybe to come:
 
-also to come (?):
 - list of AAD users and groups in extra file
 - RBAC for each resourcegroup and resource
   - maybe with a switch for extended
-- build CSV overview of all resources additionally
 - other resource providers
 
 ## Version history
+
+### 2.4 (8/21/2018)
+
+- fixed display of creation date
+- added demo html files
+- sort selected resources alphabetically
 
 ### 2.3 (8/17/2018)
 
