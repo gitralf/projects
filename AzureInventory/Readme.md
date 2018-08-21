@@ -12,8 +12,8 @@ report-htm.ps1 [-outdir <path>] [-subscription <subscriptionID>] [-resourcegroup
 - if subscription is not provided, will present list of subscriptions to pick one
 - if resourcegroup is not provided, will present a list to select at least one resourcegroup
 
-Creates a [main.htm](demo/main.htm) file and one for each resourcegroup. Follow link to see a demo output.
- 
+Creates a main HTML file and one for each resourcegroup. Download the content from demo folder and open in browser to see a demo output.
+
 Here is a list of what's currently reported, check back, the list will grow continuously (and attributes might be added to the report).
 
 - [x] Microsoft.Compute/virtualMachines
