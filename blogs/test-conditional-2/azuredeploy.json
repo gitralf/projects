@@ -1,0 +1,40 @@
+﻿{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+        "vmCount": { 
+          "type": "int" 
+        }
+  },
+   
+  "variables": {
+    "index": "[mod(add(parameters('vmCount'), 1), parameters('vmCount'))]",
+    "avSetTemplate": "[variables('avSetTemplates')[variables('index')]]",
+    "avSetTemplates": [
+      "[uri(deployment().properties.templateLink.uri, 'availabilitySet-empty.json')]",
+      "[uri(deployment().properties.templateLink.uri, 'availabilitySet-new.json')]"
+    ],
+    "templateNamePart": [
+      "nop",
+      "new"
+    ],
+    "deploymentName": "[variables('templateNamePart')[variables('index')]]"
+  },
+
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2015-01-01",
+      "name": "[variables('deploymentName')]",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": { "uri": "[variables('avSetTemplate')]" },
+        "parameters": {
+        }
+      }
+    }
+  ],
+
+  "outputs": {
+  }
+}
