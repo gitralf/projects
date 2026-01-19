@@ -1,4 +1,3 @@
-
 <# 
 .SYNOPSIS
 Exportiert aus allen .pptx-Dateien in einem Verzeichnis alle Folien als PNG in "<Path>\Thumbnails".

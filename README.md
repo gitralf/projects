@@ -1,6 +1,10 @@
 # Projects
 
-some projects for the public go here
+some projects go here
+
+## Slidemanager
+
+Manage PPTX slides, recombine to new presentations
 
 ## AzureInventory
 
