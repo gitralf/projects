@@ -18,7 +18,7 @@ and run. Example:
 
 The script will open every PowerPoint presentation in <code>c:\temp\allPPTX</code> and will export for each slide a PNG file into <code>c:\temp\allThumbs</code>. It will only process the PPTX when the last modified date is newer than the slide-PNGs, otherwise will skip the presentation.
 
-This script is the base for other slidemanager-scripts. 
+This script is the base for other slidemanager-scripts. It will produce a logfile in the OutPath.
 
 ## Find-Duplicate.ps1
 
