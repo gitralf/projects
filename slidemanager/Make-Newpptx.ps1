@@ -97,6 +97,8 @@ foreach ($f in $pngFiles) {
     }) | Out-Null
 }
 
+$totalCount = $Items.Count
+
 # ------------------------------------------------------------------------------------
 # XAML-UI (Breite via ElementName-Binding auf den Slider)
 # ------------------------------------------------------------------------------------
@@ -177,6 +179,8 @@ if (-not $ItemsList -or -not $TileWidthSlider -or -not $ExportBtn) {
 }
 
 # Bind Items
+
+
 $ItemsList.ItemsSource = $Items
 
 # Slider Label
@@ -334,6 +338,8 @@ $ExportBtn.Add_Click({
         Write-Host "Keine Dateien ausgewählt." -ForegroundColor Yellow
     }
 })
+
+write-host "[INFO] loading $totalcount images, please wait..." -ForegroundColor Green  
 
 
 
